@@ -1,4 +1,4 @@
-from nonebot import on_message, on_fullmatch
+from nonebot import on_fullmatch, on_command
 from nonebot.adapters.onebot.v11 import (
     Bot,
     MessageEvent,
@@ -12,6 +12,9 @@ from .data_handle import req_chatgpt
 from nonebot.typing import T_State
 from html import unescape
 from nonebot.permission import SUPERUSER
+from nonebot.params import CommandArg
+from nonebot.adapters import Message
+
 
 talk_cmd = pc.talk_with_chatgpt_talk_cmd
 talk_p_cmd = pc.talk_with_chatgpt_talk_p_cmd
@@ -46,28 +49,19 @@ def get_id(event: MessageEvent) -> str:
     return id
 
 
-async def rule_check(event: MessageEvent, bot: Bot) -> bool:
+async def rule_check(event: MessageEvent, bot: Bot, args: Message = CommandArg()) -> bool:
     """对话响应判断"""
     # bot判断
     if bot != var.handle_bot:
         return False
     # 获取纯文本
-    text = event.get_plaintext().strip()
-
+    text = args.extract_plain_text().strip()
     if isinstance(event, GroupMessageEvent):
-        # 仅艾特但没发内容
-        if event.is_tome() and pc.talk_with_chatgpt_talk_at:
-            if text:
-                return True
-            else:
-                return False
-
-        return text[: len(talk_cmd)] == talk_cmd
-
+        # at了 并且需要 at 返回true  
+        return (event.is_tome() == pc.talk_with_chatgpt_talk_at) and text
     elif isinstance(event, PrivateMessageEvent):
         # 判断前缀
-        return text[: len(talk_cmd)] == talk_cmd
-
+        return True
     return False
 
 
@@ -95,19 +89,16 @@ async def rule_check3(event: MessageEvent, bot: Bot) -> bool:
 #################
 ### 响应器
 #################
-talk = on_message(rule=rule_check)
+talk = on_command(cmd=talk_cmd,rule=rule_check)
 talk_p = on_fullmatch(talk_p_cmd, rule=rule_check2)
 reset = on_fullmatch(reset_cmd, rule=rule_check2)
 prompt_set = on_fullmatch(prompt_cmd, permission=rule_check3)
 
 
 @talk.handle()
-async def _(event: MessageEvent):
+async def _(event: MessageEvent, args: Message = CommandArg()):
     # 获取信息
-    text = unescape(event.get_plaintext().strip())
-    # 把命令前缀截掉
-    if text[: len(talk_cmd)] == talk_cmd:
-        text = text[len(talk_cmd) :]
+    text = unescape(args.extract_plain_text().strip())
     # 无内容
     if not text:
         await talk.finish(
