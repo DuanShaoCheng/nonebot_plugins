@@ -31,6 +31,7 @@ __plugin_meta__ = PluginMetadata(
 """,
 )
 
+wait_queue = []
 
 def get_id(event: MessageEvent) -> str:
     """获取会话id"""
@@ -110,13 +111,20 @@ async def _(event: MessageEvent, args: Message = CommandArg()):
         )
     # 获取用户id
     id = get_id(event)
-
+    if id in wait_queue:
+        await talk.finish("我知道你很着急，但是请不要着急 ～～", at_sender=True)
+    wait_queue.append(id)
     # 根据配置是否发出提示
     if pc.talk_with_chatgpt_reply_notice:
         await talk.send("响应中...")
-
-    result = await req_chatgpt(id, text)
-    await talk.finish(result, at_sender=True)
+    try:
+        result = await req_chatgpt(id, text)
+        await talk.send(result, at_sender=True)
+    except:
+        await talk.send("服务器繁忙稍后再试", at_sender=True)
+    finally:
+        wait_queue.remove(id)
+        await talk.finish()
 
 
 @talk_p.got("msg", prompt="进入沉浸式对话模式，发送“退出”结束对话")
